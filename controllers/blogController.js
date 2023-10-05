@@ -20,7 +20,7 @@ const fetchBlogs = async () => {
     }
 }
 
-const blogStats = async (req, res) => {
+const getCachedBlogStats = _.memoize(async () => {
     try {
         const blogs = await fetchBlogs();
 
@@ -29,12 +29,23 @@ const blogStats = async (req, res) => {
         const blogsWithPrivacy = _.filter(blogs, (blog) => _.includes(_.toLower(blog.title), 'privacy'));
         const uniqueBlogTitles = _.uniqBy(blogs, 'title');
 
-        return res.send({
+        return {
             totalBlogs,
             longestBlog: longestBlog.title,
             blogsWithPrivacy: blogsWithPrivacy.length,
             uniqueBlogTitles,
-        });
+        };
+    } catch (error) {
+        console.error('Error in blog fetch:', error);
+        return res.status(500).send({ error: 'Internal Server Error' });
+    }
+});
+
+const blogStats = async (req, res) => {
+    try {
+        const cachedBlogResult = await getCachedBlogStats();
+
+        return res.status(200).send(cachedBlogResult);
 
 
     } catch (error) {
@@ -43,10 +54,8 @@ const blogStats = async (req, res) => {
     }
 }
 
-const searchBlogs = async (req, res) => {
+const getCachedBlogSearchResults = _.memoize(async (query) => {
     try {
-        const { query } = req.query;
-
         if (!query) {
             return res.status(400).send({ error: 'Query parameter is required' });
         }
@@ -57,7 +66,20 @@ const searchBlogs = async (req, res) => {
             _.includes(_.toLower(blog.title), _.toLower(query))
         );
 
-        return res.send({ results: filteredBlogs });
+        return { results: filteredBlogs };
+    } catch (error) {
+        console.error('Error in blog search:', error);
+        return res.status(500).send({ error: 'Internal Server Error' });
+    }
+});
+
+const searchBlogs = async (req, res) => {
+    try {
+        const { query } = req.query;
+
+        const cachedSearchResult = await getCachedBlogSearchResults(query);
+
+        return res.send({ results: cachedSearchResult });
     } catch (error) {
         console.error('Error in blog search:', error);
         return res.status(500).send({ error: 'Internal Server Error' });
